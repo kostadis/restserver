@@ -53,7 +53,7 @@ func TestCreateItemHandler(t *testing.T) {
 	itemPayload := models.Item{
 		Name:        "Test Handler Item",
 		Description: "Description for handler test",
-		Price:       19.99,
+		Priority:    1,
 	}
 	payloadBytes, err := json.Marshal(itemPayload)
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestCreateItemHandler(t *testing.T) {
 	assert.NotZero(t, createdItem.ID, "Expected created item to have an ID")
 	assert.Equal(t, itemPayload.Name, createdItem.Name)
 	assert.Equal(t, itemPayload.Description, createdItem.Description)
-	assert.Equal(t, itemPayload.Price, createdItem.Price)
+	assert.Equal(t, itemPayload.Priority, createdItem.Priority)
 
 	// Verify in DB as well
 	dbItem, err := database.GetItem(db, createdItem.ID)
@@ -88,9 +88,9 @@ func TestGetItemsHandler(t *testing.T) {
 	defer db.Close()
 
 	// Setup: Add some items to the DB
-	_, err := database.CreateItem(db, models.Item{Name: "Item1", Price: 10})
+	_, err := database.CreateItem(db, models.Item{Name: "Item1", Priority: 1})
 	require.NoError(t, err)
-	_, err = database.CreateItem(db, models.Item{Name: "Item2", Price: 20})
+	_, err = database.CreateItem(db, models.Item{Name: "Item2", Priority: 2})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
@@ -116,7 +116,7 @@ func TestGetItemHandler(t *testing.T) {
 	defer db.Close()
 
 	// Setup: Add an item
-	created, err := database.CreateItem(db, models.Item{Name: "SpecificItem", Price: 12.34})
+	created, err := database.CreateItem(db, models.Item{Name: "SpecificItem", Priority: 3})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
@@ -157,13 +157,13 @@ func TestUpdateItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
 
-	initialID, err := database.CreateItem(db, models.Item{Name: "InitialName", Price: 1.00})
+	initialID, err := database.CreateItem(db, models.Item{Name: "InitialName", Priority: 1})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/items/{id}", UpdateItemHandler(db)).Methods(http.MethodPut)
 
-	updatePayload := models.Item{Name: "UpdatedName", Price: 2.00}
+	updatePayload := models.Item{Name: "UpdatedName", Priority: 2}
 	payloadBytes, _ := json.Marshal(updatePayload)
 
 	reqPath := "/items/" + strconv.FormatInt(initialID, 10)
@@ -187,7 +187,7 @@ func TestDeleteItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
 
-	initialID, err := database.CreateItem(db, models.Item{Name: "ToDelete", Price: 1.00})
+	initialID, err := database.CreateItem(db, models.Item{Name: "ToDelete", Priority: 1})
 	require.NoError(t, err)
 
 	router := mux.NewRouter()

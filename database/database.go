@@ -49,13 +49,13 @@ func InitDB(filepathArg string) (*sql.DB, error) {
 // CreateItem adds a new item to the database.
 // It returns the ID of the newly created item.
 func CreateItem(db *sql.DB, item models.Item) (int64, error) {
-	stmt, err := db.Prepare("INSERT INTO items(name, description, price) VALUES(?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO items(name, description, priority) VALUES(?, ?, ?)")
 	if err != nil {
 		return 0, err
 	}
 	defer stmt.Close()
 
-	result, err := stmt.Exec(item.Name, item.Description, item.Price)
+	result, err := stmt.Exec(item.Name, item.Description, item.Priority)
 	if err != nil {
 		return 0, err
 	}
@@ -69,14 +69,14 @@ func CreateItem(db *sql.DB, item models.Item) (int64, error) {
 
 // GetItem retrieves a single item from the database by its ID.
 func GetItem(db *sql.DB, id int64) (models.Item, error) {
-	stmt, err := db.Prepare("SELECT id, name, description, price FROM items WHERE id = ?")
+	stmt, err := db.Prepare("SELECT id, name, description, priority FROM items WHERE id = ?")
 	if err != nil {
 		return models.Item{}, err
 	}
 	defer stmt.Close()
 
 	var item models.Item
-	err = stmt.QueryRow(id).Scan(&item.ID, &item.Name, &item.Description, &item.Price)
+	err = stmt.QueryRow(id).Scan(&item.ID, &item.Name, &item.Description, &item.Priority)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Item{}, err
@@ -88,7 +88,7 @@ func GetItem(db *sql.DB, id int64) (models.Item, error) {
 
 // GetItems retrieves all items from the database.
 func GetItems(db *sql.DB) ([]models.Item, error) {
-	stmt, err := db.Prepare("SELECT id, name, description, price FROM items")
+	stmt, err := db.Prepare("SELECT id, name, description, priority FROM items")
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func GetItems(db *sql.DB) ([]models.Item, error) {
 	var items []models.Item
 	for rows.Next() {
 		var item models.Item
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Price); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Priority); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -118,13 +118,13 @@ func GetItems(db *sql.DB) ([]models.Item, error) {
 
 // UpdateItem modifies an existing item in the database.
 func UpdateItem(db *sql.DB, id int64, item models.Item) (int64, error) {
-	stmt, err := db.Prepare("UPDATE items SET name = ?, description = ?, price = ? WHERE id = ?")
+	stmt, err := db.Prepare("UPDATE items SET name = ?, description = ?, priority = ? WHERE id = ?")
 	if err != nil {
 		return 0, err
 	}
 	defer stmt.Close()
 
-	result, err := stmt.Exec(item.Name, item.Description, item.Price, id)
+	result, err := stmt.Exec(item.Name, item.Description, item.Priority, id)
 	if err != nil {
 		return 0, err
 	}

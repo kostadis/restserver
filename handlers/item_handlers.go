@@ -52,8 +52,8 @@ func CreateItemHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		if item.Name == "" || item.Price <= 0 {
-			writeJSONResponse(w, http.StatusBadRequest, "Name and a positive Price are required")
+		if item.Name == "" || item.Priority <= 0 {
+			writeJSONResponse(w, http.StatusBadRequest, "Name and a positive Priority are required")
 			return
 		}
 
@@ -135,8 +135,8 @@ func UpdateItemHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		if item.Name == "" || item.Price <= 0 {
-			writeJSONResponse(w, http.StatusBadRequest, "Name and a positive Price are required")
+		if item.Name == "" || item.Priority <= 0 {
+			writeJSONResponse(w, http.StatusBadRequest, "Name and a positive Priority are required")
 			return
 		}
 
