@@ -42,3 +42,56 @@ The script generates a CSV file with the following columns:
 -   **`Path`**: The full absolute or relative path to the file (e.g., `/home/user/documents/document.txt` or `./subdir/image.jpg`).
 -   **`Size (Bytes)`**: The size of the file in bytes (e.g., `1024`).
 -   **`Last Modified`**: The date and time the file was last modified, in `YYYY-MM-DD HH:MM:SS` format (e.g., `2023-10-27 14:35:10`).
+
+## Todo CLI Utility
+
+A command-line interface to manage todo items by interacting with a REST API.
+
+### Setup
+
+-   Python 3 is required.
+-   Install the `requests` library:
+    ```bash
+    pip install requests
+    ```
+
+### Usage
+
+The basic command structure is:
+```bash
+python todo_cli.py [command] [options]
+```
+
+Or, if you make the script executable (`chmod +x todo_cli.py`):
+```bash
+./todo_cli.py [command] [options]
+```
+
+#### Commands:
+
+**`list`**
+-   Description: Lists all todo items.
+-   Example:
+    ```bash
+    python todo_cli.py list
+    ```
+
+**`create`**
+-   Description: Creates a new todo item.
+-   Arguments:
+    -   `--name NAME` (Required): The name of the item.
+    -   `--price PRICE` (Required): The price of the item (float).
+    -   `--description DESCRIPTION` (Optional): A description for the item.
+-   Example:
+    ```bash
+    python todo_cli.py create --name "Buy groceries" --price 15.99 --description "Milk, Eggs, Bread"
+    ```
+
+**`delete`**
+-   Description: Deletes a todo item by its ID.
+-   Argument:
+    -   `id` (Required): The ID of the item to delete (integer).
+-   Example:
+    ```bash
+    python todo_cli.py delete 123
+    ```
