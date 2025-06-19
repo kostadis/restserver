@@ -29,7 +29,7 @@ def handle_list_items():
                 print(f"  ID: {item.get('id')}")
                 print(f"  Name: {item.get('name')}")
                 print(f"  Description: {item.get('description', 'N/A')}")
-                print(f"  Price: ${item.get('price'):.2f}")
+                print(f"  Priority: {item.get('priority')}")
                 print("-" * 20)
         else:
             print("No items found.")
@@ -49,7 +49,7 @@ def handle_create_item(args):
     """Handles creating a new item."""
     payload = {
         "name": args.name,
-        "price": args.price
+        "priority": args.priority
     }
     if args.description:
         payload["description"] = args.description
@@ -64,7 +64,7 @@ def handle_create_item(args):
                 print(f"  ID: {item.get('id')}")
                 print(f"  Name: {item.get('name')}")
                 print(f"  Description: {item.get('description', 'N/A')}")
-                print(f"  Price: ${item.get('price'):.2f}")
+                print(f"  Priority: {item.get('priority')}")
             except json.JSONDecodeError:
                 print("Error: Could not decode JSON response from server after creating item.")
                 sys.exit(1)
@@ -126,7 +126,7 @@ def main():
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a new item")
     create_parser.add_argument("--name", required=True, help="Name of the item")
-    create_parser.add_argument("--price", required=True, type=float, help="Price of the item")
+    create_parser.add_argument("--priority", required=True, type=int, help="Priority of the item")
     create_parser.add_argument("--description", help="Description of the item")
 
     # Delete command
