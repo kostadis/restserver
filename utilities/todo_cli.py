@@ -4,8 +4,28 @@ import argparse
 import json
 import sys
 import requests
+import os # For path manipulation if needed
 
-BASE_URL = "http://localhost:8080"
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'config.json') # Example for co-located config
+# CONFIG_FILE_PATH = 'config.json' # Simpler path as they are in the same directory - THIS WAS THE BUG
+
+def load_config():
+    try:
+        with open(CONFIG_FILE_PATH, 'r') as f:
+            config = json.load(f)
+        return config["BASE_URL"]
+    # Error handling will be added in the next step as per instructions
+    except FileNotFoundError:
+        print(f"Error: Configuration file '{CONFIG_FILE_PATH}' not found.")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from '{CONFIG_FILE_PATH}'.")
+        sys.exit(1)
+    except KeyError:
+        print(f"Error: 'BASE_URL' not found in '{CONFIG_FILE_PATH}'.")
+        sys.exit(1)
+
+BASE_URL = load_config()
 
 def handle_list_items():
     """Handles listing all items."""
