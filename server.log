@@ -1,0 +1,15 @@
+2025/06/20 16:24:55 Server starting on port :8080
+2025/06/20 16:24:59 Started GET /items
+2025/06/20 16:24:59 Completed GET /items in 1.064665ms
+2025/06/20 16:24:59 Started POST /items
+2025/06/20 16:24:59 Completed POST /items in 4.883533ms
+2025/06/20 16:25:00 Started POST /items
+2025/06/20 16:25:00 Completed POST /items in 2.677509ms
+2025/06/20 16:25:01 Started GET /items
+2025/06/20 16:25:01 Completed GET /items in 481.234µs
+2025/06/20 16:25:01 Started DELETE /items/2
+2025/06/20 16:25:01 Completed DELETE /items/2 in 2.149417ms
+2025/06/20 16:25:02 Started GET /items
+2025/06/20 16:25:02 Completed GET /items in 242.486µs
+2025/06/20 16:25:02 Started DELETE /items/9999
+2025/06/20 16:25:02 Completed DELETE /items/9999 in 353.624µs
