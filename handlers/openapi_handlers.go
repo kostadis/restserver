@@ -191,7 +191,7 @@ func (s *ItemAPIServer) UpdateItemById(w http.ResponseWriter, r *http.Request, i
 
 // DeleteItemById implements the logic for the (DELETE /items/{id}) endpoint.
 func (s *ItemAPIServer) DeleteItemById(w http.ResponseWriter, r *http.Request, id int64) {
-	err := database.DeleteItem(s.DB, id)
+	_, err := database.DeleteItem(s.DB, id)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if errors.Is(err, sql.ErrNoRows) {

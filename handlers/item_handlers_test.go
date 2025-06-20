@@ -73,7 +73,6 @@ func setupTestRouter(db *sql.DB) *chi.Mux {
 	// Register other non-OpenAPI routes (if any) that are still managed by old handlers
 	router.Get("/items", GetItemsHandler(db)) // For getting all items (assuming this is not OpenAPI yet)
 	// router.Put("/items/{id}", UpdateItemHandler(db)) // REMOVED - Now handled by OpenAPI
-	router.Delete("/items/{id}", DeleteItemHandler(db)) // Assuming this is not OpenAPI yet
 
 	return router
 }
@@ -439,23 +438,6 @@ func TestUpdateItemOpenAPI(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, errResp.Error, "Invalid request payload")
 	})
-}
-
-func TestDeleteItemHandler(t *testing.T) { // Assuming this remains non-OpenAPI for now
-	db := setupHandlerTestDB(t)
-	defer db.Close()
-	initialItem := createTestItemDirectly(t, db, models.Item{Name: "ToDelete", Description: "Delete Desc", Priority: 1})
-	router := setupTestRouter(db)
-
-	reqPath := "/items/" + strconv.FormatInt(initialItem.ID, 10)
-	req, _ := http.NewRequest(http.MethodDelete, reqPath, nil)
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusNoContent, rr.Code)
-	_, err := database.GetItem(db, initialItem.ID)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, sql.ErrNoRows), "Expected sql.ErrNoRows after deleting item")
 }
 
 func TestDeleteItemByIdOpenAPI(t *testing.T) {
