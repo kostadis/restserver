@@ -81,8 +81,8 @@ func main() {
 	// Register other existing API routes using Chi's syntax
 	// These handlers are from handlers/item_handlers.go
 	// Note: The GetItemHandler was removed, so we don't register it here.
-	// The POST /items route is now handled by the OpenAPI generated code via HandlerWithOptions.
-	router.Get("/items", handlers.GetItemsHandler(DB)) // For getting all items
+	// The POST /items and GET /items (all items) routes are now handled by the OpenAPI generated code
+	// via HandlerWithOptions because GetItems is part of the ServerInterface.
 
 
 	// Start the HTTP server

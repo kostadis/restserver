@@ -70,8 +70,8 @@ func setupTestRouter(db *sql.DB) *chi.Mux {
 		},
 	})
 
-	// Register other non-OpenAPI routes (if any) that are still managed by old handlers
-	router.Get("/items", GetItemsHandler(db)) // For getting all items (assuming this is not OpenAPI yet)
+	// All /items and /items/{id} routes are now handled by the OpenAPI spec and ItemAPIServer.
+	// No need to register GetItemsHandler(db) separately.
 
 	return router
 }
@@ -164,22 +164,93 @@ func TestCreateItemOpenAPI(t *testing.T) {
 	})
 }
 
-func TestGetItemsHandler(t *testing.T) { // Assuming this remains non-OpenAPI for now
+func TestGetItemsOpenAPI(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-	createTestItemDirectly(t, db, models.Item{Name: "Item1", Description: "Desc1", Priority: 1})
-	createTestItemDirectly(t, db, models.Item{Name: "Item2", Description: "Desc2", Priority: 2})
-	router := setupTestRouter(db)
+	router := setupTestRouter(db) // This router will now use the OpenAPI handler for GET /items
 
-	req, _ := http.NewRequest(http.MethodGet, "/items", nil)
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
+	// Test Case 1: Empty list
+	t.Run("empty list", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/items", nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	var items []models.Item
-	err := json.NewDecoder(rr.Body).Decode(&items)
-	require.NoError(t, err)
-	assert.Len(t, items, 2)
+		require.Equal(t, http.StatusOK, rr.Code)
+		// Check for empty array "[]"
+		// The handler implementation ensures an empty slice `[]models.Item{}` which becomes `[]`
+		// json.NewEncoder adds a newline character by default, so trim it for JSONEq.
+		assert.JSONEq(t, `[]`, strings.TrimSpace(rr.Body.String()))
+
+		var items []openapi.Item
+		// Decode after checking the raw string to ensure it's valid JSON for an empty list
+		err := json.NewDecoder(strings.NewReader(rr.Body.String())).Decode(&items)
+		require.NoError(t, err)
+		assert.Len(t, items, 0)
+	})
+
+	// Test Case 2: List with multiple items
+	t.Run("list with multiple items", func(t *testing.T) {
+		// Create items
+		itemModel1 := createTestItemDirectly(t, db, models.Item{Name: "Item1 OpenAPI", Description: "Desc1 OpenAPI", Priority: 1})
+		itemModel2 := createTestItemDirectly(t, db, models.Item{Name: "Item2 OpenAPI", Description: "Desc2 OpenAPI", Priority: 2})
+		// Item with empty description to test *string handling
+		itemModel3 := createTestItemDirectly(t, db, models.Item{Name: "Item3 OpenAPI", Description: "", Priority: 3})
+
+
+		req, _ := http.NewRequest(http.MethodGet, "/items", nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		var apiItems []openapi.Item
+		err := json.NewDecoder(rr.Body).Decode(&apiItems)
+		require.NoError(t, err)
+		assert.Len(t, apiItems, 3) // Updated to 3 items
+
+		// Verify item1
+		foundItem1 := false
+		for _, apiItem := range apiItems {
+			if apiItem.Id != nil && *apiItem.Id == itemModel1.ID {
+				foundItem1 = true
+				assert.Equal(t, itemModel1.Name, apiItem.Name)
+				require.NotNil(t, apiItem.Description, "Description for item1 should not be nil")
+				assert.Equal(t, itemModel1.Description, *apiItem.Description)
+				assert.Equal(t, int32(itemModel1.Priority), apiItem.Priority)
+				break
+			}
+		}
+		assert.True(t, foundItem1, "Item1 not found in response")
+
+		// Verify item2
+		foundItem2 := false
+		for _, apiItem := range apiItems {
+			if apiItem.Id != nil && *apiItem.Id == itemModel2.ID {
+				foundItem2 = true
+				assert.Equal(t, itemModel2.Name, apiItem.Name)
+				require.NotNil(t, apiItem.Description, "Description for item2 should not be nil")
+				assert.Equal(t, itemModel2.Description, *apiItem.Description)
+				assert.Equal(t, int32(itemModel2.Priority), apiItem.Priority)
+				break
+			}
+		}
+		assert.True(t, foundItem2, "Item2 not found in response")
+
+		// Verify item3 (with empty description)
+		foundItem3 := false
+		for _, apiItem := range apiItems {
+			if apiItem.Id != nil && *apiItem.Id == itemModel3.ID {
+				foundItem3 = true
+				assert.Equal(t, itemModel3.Name, apiItem.Name)
+				// The handler sets Description to &dbItem.Description.
+				// If dbItem.Description is "", apiItem.Description will be a pointer to an empty string.
+				require.NotNil(t, apiItem.Description, "Description for item3 should not be nil, should be pointer to empty string")
+				assert.Equal(t, "", *apiItem.Description) // Check it's an empty string
+				assert.Equal(t, int32(itemModel3.Priority), apiItem.Priority)
+				break
+			}
+		}
+		assert.True(t, foundItem3, "Item3 not found in response")
+	})
 }
 
 func TestGetItemByIdOpenAPI(t *testing.T) { // Renamed to avoid conflict if an old GetItemByIdHandler test existed

@@ -6,6 +6,24 @@ info:
 
 paths:
   /items:
+    get:
+      summary: List all items
+      operationId: getItems
+      responses:
+        '200':
+          description: A list of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
       summary: Create a new item
       operationId: createItem

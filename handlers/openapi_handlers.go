@@ -26,6 +26,43 @@ func NewItemAPIServer(db *sql.DB) *ItemAPIServer {
 	return &ItemAPIServer{DB: db}
 }
 
+// GetItems handles retrieving all items based on the OpenAPI spec.
+func (s *ItemAPIServer) GetItems(w http.ResponseWriter, r *http.Request) {
+	dbItems, err := database.GetItems(s.DB)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(openapi.Error{Error: "Failed to retrieve items: " + err.Error()})
+		return
+	}
+
+	if dbItems == nil { // Or len(dbItems) == 0
+		// Ensure an empty array is returned, not null, if dbItems is nil
+		// If GetItems returns an empty slice for no items, this also works.
+		dbItems = []models.Item{}
+	}
+
+	apiItems := make([]openapi.Item, len(dbItems))
+	for i, dbItem := range dbItems {
+		// Ensure correct mapping, especially for pointer types and type conversions
+		apiItems[i] = openapi.Item{
+			Id:          &dbItem.ID, // models.Item.ID is int64, openapi.Item.Id is *int64
+			Name:        dbItem.Name,
+			Description: &dbItem.Description, // models.Item.Description is string, openapi.Item.Description is *string
+			Priority:    int32(dbItem.Priority), // models.Item.Priority is int, openapi.Item.Priority is int32
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(apiItems); err != nil {
+		// Log error, as headers are already written.
+		// Consider a more robust error handling for this case if necessary.
+		// For now, we'll rely on the fact that if Encode fails, the client will likely timeout or get a broken response.
+		// log.Printf("Error encoding items to response: %v", err) // Example logging
+	}
+}
+
 // GetItemById implements the logic for the (GET /items/{id}) endpoint.
 func (s *ItemAPIServer) GetItemById(w http.ResponseWriter, r *http.Request, id int64) {
 	dbItem, err := database.GetItem(s.DB, id)

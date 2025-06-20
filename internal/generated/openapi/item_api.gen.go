@@ -46,6 +46,9 @@ type UpdateItemByIdJSONRequestBody = UpdateItem
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List all items
+	// (GET /items)
+	GetItems(w http.ResponseWriter, r *http.Request)
 	// Create a new item
 	// (POST /items)
 	CreateItem(w http.ResponseWriter, r *http.Request)
@@ -63,6 +66,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// List all items
+// (GET /items)
+func (_ Unimplemented) GetItems(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Create a new item
 // (POST /items)
@@ -96,6 +105,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetItems operation middleware
+func (siw *ServerInterfaceWrapper) GetItems(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetItems(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateItem operation middleware
 func (siw *ServerInterfaceWrapper) CreateItem(w http.ResponseWriter, r *http.Request) {
@@ -299,6 +322,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/items", wrapper.GetItems)
+	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/items", wrapper.CreateItem)
 	})
