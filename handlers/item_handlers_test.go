@@ -582,23 +582,3 @@ func TestDeleteItemByIdOpenAPI(t *testing.T) {
 		assert.Contains(t, strings.ToLower(errResp.Error), "invalid format for parameter id", "Error message for invalid ID format mismatch")
 	})
 }
-
-// TestCreateItemHandler (old, non-OpenAPI one) is removed as POST /items is covered by TestCreateItemOpenAPI
-
-// Test for GetItemByIdHandler is renamed to TestGetItemByIdOpenAPI and uses the OpenAPI router.
-// Test for CreateItemHandler is renamed to TestCreateItemOpenAPI and uses the OpenAPI router.
-
-// TestCreateItemHandler_BadRequest is removed as its cases are now covered by TestCreateItemOpenAPI (missing name, malformed JSON)
-// or similar tests for TestUpdateItemOpenAPI.
-// The original TestCreateItemHandler_BadRequest had specific checks for "Invalid request payload" vs "Name is required".
-// The OpenAPI handlers have similar logic, so those specific cases are tested within TestCreateItemOpenAPI and TestUpdateItemOpenAPI.
-
-// Note: The old TestCreateItemHandler is removed because POST /items is now served by openapi_handlers.CreateItem.
-// Its functionality is tested in TestCreateItemOpenAPI.
-
-// Note: The old TestGetItemByIdHandler has been effectively replaced/updated by TestGetItemByIdOpenAPI
-// which uses the setupTestRouter that correctly routes GET /items/{id} to the openapi_handlers.GetItemById.
-
-// Note: The old TestCreateItemHandler_BadRequest has been removed. Its cases (malformed JSON, missing fields)
-// are covered by equivalent test cases within TestCreateItemOpenAPI and TestUpdateItemOpenAPI.
-// The new handlers provide similar error messages for these scenarios.
