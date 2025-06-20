@@ -20,6 +20,7 @@ sys.path.insert(0, CLIENT_LIB_PATH)
 from todo_api_client.api.default_api import DefaultApi
 from todo_api_client.models.item import Item
 from todo_api_client.models.new_item import NewItem
+from todo_api_client.models.update_item import UpdateItem
 # from todo_api_client.models.error import Error as ApiError # Error model might not be directly used for exceptions
 from todo_api_client.exceptions import ApiException, NotFoundException, ServiceException, ForbiddenException, UnauthorizedException, BadRequestException
 import todo_api_client
@@ -141,6 +142,82 @@ def handle_delete_item(args):
         print(f"An unexpected error occurred: {e}")
         sys.exit(1)
 
+def handle_update_item(args):
+    """Handles updating an existing item by its ID."""
+    item_id = args.id
+
+    try:
+        # First, try to get the existing item
+        existing_item = api.get_item_by_id(id=item_id)
+    except NotFoundException:
+        print(f"Error: Item with ID {item_id} not found. Cannot update.")
+        sys.exit(1)
+    except ApiException as e:
+        print(f"Error fetching item with ID {item_id}:")
+        _print_api_exception_details(e)
+        sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching item {item_id}: {e}")
+        sys.exit(1)
+
+    # Determine values to update, using existing values as defaults
+    # Name and Priority are required by UpdateItem, so they must have values.
+    name_to_update = args.name if args.name is not None else existing_item.name
+    priority_to_update = args.priority if args.priority is not None else existing_item.priority
+
+    # Description can be explicitly set to None (or an empty string if the API treats it so)
+    # If args.description is not provided (is None), we keep the existing description.
+    # If args.description is provided (e.g., --description "" or --description "new desc"), we use it.
+    description_to_update = existing_item.description # Default to existing
+    if args.description is not None: # User provided --description argument
+        description_to_update = args.description
+
+
+    # At least one field must be provided for an update
+    if args.name is None and args.description is None and args.priority is None:
+        print("No update fields provided. To update an item, provide at least one of --name, --description, or --priority.")
+        # Depending on API behavior, an empty description might be "" or null.
+        # The UpdateItem model should clarify if description is nullable or just string.
+        # Assuming UpdateItem's description can take None if the API supports it,
+        # or an empty string if it should be cleared.
+        # For this implementation, if --description is not passed, existing is used.
+        # If --description "" is passed, description_to_update becomes "".
+        # If API needs explicit null for description, that's a deeper model/API contract detail.
+        print("If you meant to clear the description, use --description \"\" (an empty string).")
+        sys.exit(0) # Not an error, but user intent is unclear or no change.
+
+
+    update_payload = UpdateItem(
+        name=name_to_update,
+        priority=priority_to_update,
+        description=description_to_update
+    )
+
+    try:
+        updated_item = api.update_item_by_id(id=item_id, update_item=update_payload)
+        print("Successfully updated item:")
+        print(f"  ID: {updated_item.id}")
+        print(f"  Name: {updated_item.name}")
+        description = 'N/A'
+        if hasattr(updated_item, 'description') and updated_item.description is not None:
+            description = updated_item.description
+        print(f"  Description: {description}")
+        print(f"  Priority: {updated_item.priority}")
+    except NotFoundException: # Should ideally not happen if the initial GET succeeded, but good practice
+        print(f"Error: Item with ID {item_id} disappeared before update.")
+        sys.exit(1)
+    except BadRequestException as e:
+        print(f"Error updating item {item_id} (Invalid Request):")
+        _print_api_exception_details(e)
+        sys.exit(1)
+    except ApiException as e:
+        print(f"Error updating item {item_id}:")
+        _print_api_exception_details(e)
+        sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred while updating item {item_id}: {e}")
+        sys.exit(1)
+
 def main():
     """Main function to parse arguments and call appropriate handlers."""
     parser = argparse.ArgumentParser(description="A simple CLI tool to interact with a TODO API.")
@@ -161,6 +238,13 @@ def main():
     # The 'id' here matches the parameter name in the OpenAPI spec for deleteItemById.
     delete_parser.add_argument("id", type=int, help="ID of the item to delete")
 
+    # Update command
+    update_parser = subparsers.add_parser("update", help="Update an existing item by ID")
+    update_parser.add_argument("id", type=int, help="ID of the item to update")
+    update_parser.add_argument("--name", type=str, help="New name for the item")
+    update_parser.add_argument("--description", type=str, help="New description for the item")
+    update_parser.add_argument("--priority", type=int, help="New priority for the item")
+
     args = parser.parse_args()
 
     if args.command == "list":
@@ -169,6 +253,8 @@ def main():
         handle_create_item(args)
     elif args.command == "delete":
         handle_delete_item(args)
+    elif args.command == "update":
+        handle_update_item(args)
     else:
         parser.print_help()
 
