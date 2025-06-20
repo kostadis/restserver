@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	// "log" // Add if needed for debugging
 
 	"app/database"
-	// "app/models" // Original model - This was unused, GetItem now returns database.Item which is mapped to openapi.Item
 	"app/internal/generated/openapi" // Generated package
+	"app/models"                     // For converting to DB model
 )
 
 // ItemAPIServer implements the openapi.ServerInterface
@@ -57,4 +58,65 @@ func (s *ItemAPIServer) GetItemById(w http.ResponseWriter, r *http.Request, id i
 // NewItemAPIServer creates a new ItemAPIServer.
 func NewItemAPIServer(db *sql.DB) *ItemAPIServer {
 	return &ItemAPIServer{DB: db}
+}
+
+// CreateItem handles the creation of a new item based on the OpenAPI spec.
+func (s *ItemAPIServer) CreateItem(w http.ResponseWriter, r *http.Request) {
+	var requestBody openapi.NewItem // This is the schema defined for the request body
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(openapi.Error{Error: "Invalid request payload: " + err.Error()})
+		return
+	}
+	defer r.Body.Close()
+
+	// Validate input (example: Name and Priority are required by schema, but extra checks can be here)
+	if requestBody.Name == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(openapi.Error{Error: "Name is required"})
+		return
+	}
+	if requestBody.Priority <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(openapi.Error{Error: "Priority must be a positive integer"})
+		return
+	}
+
+	// Convert openapi.NewItem to models.Item for database operation
+	dbItem := models.Item{
+		Name:     requestBody.Name,
+		Priority: int(requestBody.Priority), // models.Item uses int for Priority
+	}
+	if requestBody.Description != nil {
+		dbItem.Description = *requestBody.Description
+	}
+
+	// Call database to create item
+	id, err := database.CreateItem(s.DB, dbItem)
+	if err != nil {
+		// log.Printf("Error creating item in database: %v", err) // Optional logging
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(openapi.Error{Error: "Failed to create item: " + err.Error()})
+		return
+	}
+
+	// Construct the response item (openapi.Item, which includes the ID)
+	responseItem := openapi.Item{
+		Id:          &id,
+		Name:        requestBody.Name,
+		Priority:    requestBody.Priority, // Retains int32 from NewItem/Item schema
+		Description: requestBody.Description,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(responseItem); err != nil {
+		// If encoding fails after setting headers, it's hard to recover gracefully.
+		// Log the error. Consider if any other action is needed.
+		// log.Printf("Error encoding success response: %v", err)
+	}
 }

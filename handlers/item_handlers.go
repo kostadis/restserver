@@ -43,31 +43,6 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, payload interface{
 	}
 }
 
-// CreateItemHandler handles the creation of a new item.
-func CreateItemHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var item models.Item
-		if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, "Invalid request payload: "+err.Error())
-			return
-		}
-		defer r.Body.Close()
-
-		if item.Name == "" || item.Priority <= 0 {
-			writeJSONResponse(w, http.StatusBadRequest, "Name and a positive Priority are required")
-			return
-		}
-
-		id, err := database.CreateItem(db, item)
-		if err != nil {
-			writeJSONResponse(w, http.StatusInternalServerError, "Failed to create item") // User-friendly message
-			return
-		}
-		item.ID = id
-		writeJSONResponse(w, http.StatusCreated, item)
-	}
-}
-
 // GetItemsHandler handles retrieving all items.
 func GetItemsHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

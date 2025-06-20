@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"errors" // For custom error handler
+	"os"     // For os.ReadFile
 
 	"app/database"
 	"app/models" // Original model, still used for creating test data
@@ -58,7 +59,7 @@ func setupTestRouter(db *sql.DB) *chi.Mux {
 		},
 	})
 
-	router.Post("/items", CreateItemHandler(db))
+	// router.Post("/items", CreateItemHandler(db)) // This handler was removed and is covered by OpenAPI
 	router.Get("/items", GetItemsHandler(db))
 	router.Put("/items/{id}", UpdateItemHandler(db))
 	router.Delete("/items/{id}", DeleteItemHandler(db))
@@ -168,6 +169,134 @@ func TestGetItemByIdHandler(t *testing.T) {
 	})
 }
 
+// PtrString is a helper function to get a pointer to a string.
+// Useful for optional string fields in OpenAPI generated structs.
+func PtrString(s string) *string {
+	return &s
+}
+
+func TestCreateItemOpenAPI(t *testing.T) {
+	db := setupHandlerTestDB(t)
+	defer db.Close()
+
+	// Read and execute schema
+	// Adjust path if getProjectRootForHandlers() is not suitable or if tests are run from a different CWD.
+	// Assuming tests are run from the 'handlers' directory or project root where '../database/schema.sql' is valid.
+	schemaPath := filepath.Join(getProjectRootForHandlers(), "database", "schema.sql")
+	schemaBytes, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "Failed to read schema.sql")
+	_, err = db.Exec(string(schemaBytes))
+	require.NoError(t, err, "Failed to execute schema on test database")
+
+	itemAPIServer := NewItemAPIServer(db) // Use the actual ItemAPIServer
+	router := chi.NewRouter()          // Create a new router for this specific test setup
+
+	// Register ONLY the OpenAPI handlers. This ensures that POST /items uses the openapi_handlers.CreateItem
+	openapi.HandlerWithOptions(itemAPIServer, openapi.ChiServerOptions{
+		BaseRouter: router,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) { // Optional: Custom error handler for tests
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest) // Default to 400 for test simplicity
+			json.NewEncoder(w).Encode(openapi.Error{Error: "test error handler: " + err.Error()})
+		},
+	})
+
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	t.Run("Successful item creation via OpenAPI", func(t *testing.T) {
+		newItem := openapi.NewItem{
+			Name:        "Test Item via OpenAPI",
+			Priority:    10,
+			Description: PtrString("A description for OpenAPI test"), // Use local PtrString
+		}
+		bodyBytes, err := json.Marshal(newItem)
+		require.NoError(t, err)
+
+		res, err := http.Post(ts.URL+"/items", "application/json", bytes.NewBuffer(bodyBytes))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusCreated, res.StatusCode, "Expected status 201 Created")
+
+		var createdItem openapi.Item
+		err = json.NewDecoder(res.Body).Decode(&createdItem)
+		require.NoError(t, err, "Failed to decode successful response")
+
+		assert.Equal(t, newItem.Name, createdItem.Name)
+		assert.Equal(t, newItem.Priority, createdItem.Priority)
+		require.NotNil(t, newItem.Description, "Test setup error: newItem.Description should not be nil")
+		require.NotNil(t, createdItem.Description, "createdItem.Description should not be nil for this test case")
+		if createdItem.Description != nil && newItem.Description != nil { // Defensive check
+			assert.Equal(t, *newItem.Description, *createdItem.Description)
+		}
+		require.NotNil(t, createdItem.Id, "Created item ID should not be nil")
+		assert.True(t, *createdItem.Id > 0, "Created item ID should be positive")
+	})
+
+	t.Run("Bad request via OpenAPI - missing name", func(t *testing.T) {
+		badItem := openapi.NewItem{
+			// Name is intentionally missing
+			Priority:    5,
+			Description: PtrString("Item with no name"), // Use local PtrString
+		}
+		bodyBytes, err := json.Marshal(badItem)
+		require.NoError(t, err)
+
+		res, err := http.Post(ts.URL+"/items", "application/json", bytes.NewBuffer(bodyBytes))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusBadRequest, res.StatusCode, "Expected status 400 Bad Request")
+
+		var errResp openapi.Error
+		err = json.NewDecoder(res.Body).Decode(&errResp)
+		require.NoError(t, err, "Failed to decode error response")
+
+		// The error message comes from the validation in handlers/openapi_handlers.go CreateItem
+		expectedErrorMsg := "Name is required"
+		assert.Contains(t, errResp.Error, expectedErrorMsg, "Error message mismatch")
+	})
+
+	t.Run("Bad request via OpenAPI - invalid priority", func(t *testing.T) {
+		badItem := openapi.NewItem{
+			Name:        "Item with bad priority",
+			Priority:    0, // Priority must be positive
+			Description: PtrString("A description"),
+		}
+		bodyBytes, err := json.Marshal(badItem)
+		require.NoError(t, err)
+
+		res, err := http.Post(ts.URL+"/items", "application/json", bytes.NewBuffer(bodyBytes))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+		var errResp openapi.Error
+		err = json.NewDecoder(res.Body).Decode(&errResp)
+		require.NoError(t, err)
+		expectedErrorMsg := "Priority must be a positive integer"
+		assert.Contains(t, errResp.Error, expectedErrorMsg)
+	})
+
+	t.Run("Bad request via OpenAPI - malformed JSON", func(t *testing.T) {
+		malformedJSON := `{"name": "Test", "priority": 1, "description": "Test desc"` // Missing closing brace
+
+		res, err := http.Post(ts.URL+"/items", "application/json", strings.NewReader(malformedJSON))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+		var errResp openapi.Error
+		err = json.NewDecoder(res.Body).Decode(&errResp)
+		require.NoError(t, err, "Failed to decode malformed JSON error response")
+		// Error comes from json.NewDecoder in the handler
+		assert.Contains(t, errResp.Error, "Invalid request payload", "Expected error message for malformed JSON")
+	})
+}
+
 func TestUpdateItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
@@ -243,6 +372,11 @@ func TestCreateItemHandler_BadRequest(t *testing.T) {
 		var errResp map[string]string
 		err = json.NewDecoder(rr.Body).Decode(&errResp)
 		require.NoError(t, err)
-		assert.Contains(t, errResp["error"], "Name and a positive Priority are required", "Expected validation error for missing fields")
+		// This test now hits the OpenAPI handler which has a more specific error message
+		// when only name is missing from a JSON that parses to openapi.NewItem.
+		// The openapi.NewItem struct has Name as a required field (non-pointer string),
+		// so if the JSON is `{"priority": 1}`, Name defaults to "".
+		// The handler then checks `if requestBody.Name == ""`
+		assert.Contains(t, errResp["error"], "Name is required", "Expected validation error for missing name via OpenAPI handler")
 	})
 }
