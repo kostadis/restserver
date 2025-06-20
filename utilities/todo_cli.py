@@ -3,11 +3,29 @@
 import argparse
 import json
 import sys
-import requests
-import os # For path manipulation if needed
+import os
 
-CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'config.json') # Example for co-located config
-# CONFIG_FILE_PATH = 'config.json' # Simpler path as they are in the same directory - THIS WAS THE BUG
+# Add the generated client library to sys.path
+# Correctly determine the path to 'utilities/api_client' relative to 'utilities/todo_cli.py'
+# __file__ is 'utilities/todo_cli.py'
+# os.path.dirname(__file__) is 'utilities'
+# os.path.join(os.path.dirname(__file__), 'api_client') is 'utilities/api_client'
+# For sys.path, we need the parent of 'utilities' if api_client is 'utilities/api_client'
+# No, if the generated client's root package 'todo_api_client' is directly inside 'utilities/api_client',
+# then 'utilities/api_client' is the correct path to add.
+
+CLIENT_LIB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'api_client'))
+sys.path.insert(0, CLIENT_LIB_PATH)
+
+from todo_api_client.api.default_api import DefaultApi
+from todo_api_client.models.item import Item
+from todo_api_client.models.new_item import NewItem
+# from todo_api_client.models.error import Error as ApiError # Error model might not be directly used for exceptions
+from todo_api_client.exceptions import ApiException, NotFoundException, ServiceException, ForbiddenException, UnauthorizedException, BadRequestException
+import todo_api_client
+
+
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 
 def load_config():
     try:
@@ -27,78 +45,79 @@ def load_config():
 
 BASE_URL = load_config()
 
+# --- API Client Setup ---
+configuration = todo_api_client.Configuration(host=BASE_URL)
+# Optional: Add authentication, proxies, SSL settings etc. here if needed
+# configuration.api_key['bearerAuth'] = 'YOUR_TOKEN' # Example for bearer token
+
+api_client_instance = todo_api_client.ApiClient(configuration)
+api = DefaultApi(api_client_instance)
+# --- End API Client Setup ---
+
+def _print_api_exception_details(e: ApiException):
+    """Helper to print details from an ApiException."""
+    print(f"API Error: {e.status} {e.reason}")
+    if e.body:
+        try:
+            error_details = json.loads(e.body)
+            # The actual structure of error_details depends on your API's error response
+            if isinstance(error_details, dict):
+                 print(f"Details: {error_details.get('error', error_details.get('message', e.body))}")
+            else: # if the error body is a simple string (e.g. "Item not found")
+                print(f"Details: {e.body}")
+        except json.JSONDecodeError:
+            print(f"Details (raw): {e.body}")
+
 def handle_list_items():
     """Handles listing all items."""
     try:
-        response = requests.get(f"{BASE_URL}/items")
-        response.raise_for_status()  # Raises an HTTPError for bad responses (4XX or 5XX)
-
-        if not response.content:
-            print("No items found or empty response from server.")
-            return
-
-        try:
-            items = response.json()
-        except json.JSONDecodeError:
-            print("Error: Could not decode JSON response from server.")
-            sys.exit(1)
-
+        items = api.get_items() # Corresponds to operationId: getItems
         if items:
             print("Todo Items:")
-            for item in items:
-                print(f"  ID: {item.get('id')}")
-                print(f"  Name: {item.get('name')}")
-                print(f"  Description: {item.get('description', 'N/A')}")
-                print(f"  Priority: {item.get('priority')}")
+            for item_obj in items: # item_obj is now an instance of the Item model
+                print(f"  ID: {item_obj.id}")
+                print(f"  Name: {item_obj.name}")
+                # Handle optional description:
+                description = 'N/A'
+                if hasattr(item_obj, 'description') and item_obj.description is not None:
+                    description = item_obj.description
+                print(f"  Description: {description}")
+                print(f"  Priority: {item_obj.priority}")
                 print("-" * 20)
         else:
             print("No items found.")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error connecting to the server: {e}")
+    except ApiException as e:
+        _print_api_exception_details(e)
         sys.exit(1)
-    except Exception as e: # Catch other potential errors, like JSONDecodeError if server sends malformed JSON on error
+    except Exception as e:
         print(f"An unexpected error occurred: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Status Code: {e.response.status_code}")
-            print(f"Response Text: {e.response.text}")
         sys.exit(1)
 
 
 def handle_create_item(args):
     """Handles creating a new item."""
-    payload = {
-        "name": args.name,
-        "priority": args.priority
-    }
+    # Create an instance of the NewItem model
+    new_item_payload = NewItem(name=args.name, priority=args.priority)
     if args.description:
-        payload["description"] = args.description
+        new_item_payload.description = args.description
 
     try:
-        response = requests.post(f"{BASE_URL}/items", json=payload)
-
-        if response.status_code == 201: # Created
-            try:
-                item = response.json()
-                print("Successfully created item:")
-                print(f"  ID: {item.get('id')}")
-                print(f"  Name: {item.get('name')}")
-                print(f"  Description: {item.get('description', 'N/A')}")
-                print(f"  Priority: {item.get('priority')}")
-            except json.JSONDecodeError:
-                print("Error: Could not decode JSON response from server after creating item.")
-                sys.exit(1)
-        else:
-            print(f"Error creating item. Status Code: {response.status_code}")
-            try:
-                error_data = response.json()
-                print(f"Server error: {error_data.get('error', 'Unknown error')}")
-            except json.JSONDecodeError:
-                print(f"Server response: {response.text}")
-            sys.exit(1)
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error connecting to the server: {e}")
+        # Call the create_item method (corresponds to operationId: createItem)
+        created_item = api.create_item(new_item=new_item_payload)
+        print("Successfully created item:")
+        print(f"  ID: {created_item.id}")
+        print(f"  Name: {created_item.name}")
+        description = 'N/A'
+        if hasattr(created_item, 'description') and created_item.description is not None:
+            description = created_item.description
+        print(f"  Description: {description}")
+        print(f"  Priority: {created_item.priority}")
+    except BadRequestException as e: # Example of specific exception handling
+        print(f"Error creating item (Invalid Request):")
+        _print_api_exception_details(e)
+        sys.exit(1)
+    except ApiException as e:
+        _print_api_exception_details(e)
         sys.exit(1)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -108,28 +127,15 @@ def handle_delete_item(args):
     """Handles deleting an item by its ID."""
     item_id = args.id
     try:
-        response = requests.delete(f"{BASE_URL}/items/{item_id}")
-
-        if response.status_code == 204:  # No Content
-            print(f"Successfully deleted item with ID: {item_id}")
-        elif response.status_code == 404: # Not Found
-            print(f"Error: Item with ID {item_id} not found.")
-            sys.exit(1)
-        else:
-            # Attempt to get more details from response for other errors
-            print(f"Error deleting item with ID {item_id}. Status Code: {response.status_code}")
-            try:
-                error_data = response.json()
-                print(f"Server error: {error_data.get('error', 'Unknown error')}")
-            except json.JSONDecodeError:
-                if response.text:
-                    print(f"Server response: {response.text}")
-                else:
-                    print("No additional error information from server.")
-            sys.exit(1)
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error connecting to the server: {e}")
+        # Call the delete_item_by_id method (corresponds to operationId: deleteItemById)
+        api.delete_item_by_id(id=item_id)
+        print(f"Successfully deleted item with ID: {item_id}")
+    except NotFoundException as e:
+        print(f"Error: Item with ID {item_id} not found.")
+        _print_api_exception_details(e)
+        sys.exit(1)
+    except ApiException as e:
+        _print_api_exception_details(e)
         sys.exit(1)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -151,6 +157,8 @@ def main():
 
     # Delete command
     delete_parser = subparsers.add_parser("delete", help="Delete an item by ID")
+    # The generated client expects path parameters as keyword arguments.
+    # The 'id' here matches the parameter name in the OpenAPI spec for deleteItemById.
     delete_parser.add_argument("id", type=int, help="ID of the item to delete")
 
     args = parser.parse_args()
