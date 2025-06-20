@@ -72,7 +72,6 @@ func setupTestRouter(db *sql.DB) *chi.Mux {
 
 	// Register other non-OpenAPI routes (if any) that are still managed by old handlers
 	router.Get("/items", GetItemsHandler(db)) // For getting all items (assuming this is not OpenAPI yet)
-	// router.Put("/items/{id}", UpdateItemHandler(db)) // REMOVED - Now handled by OpenAPI
 
 	return router
 }
@@ -514,7 +513,6 @@ func TestDeleteItemByIdOpenAPI(t *testing.T) {
 }
 
 // TestCreateItemHandler (old, non-OpenAPI one) is removed as POST /items is covered by TestCreateItemOpenAPI
-// TestUpdateItemHandler (old, non-OpenAPI one) is removed as PUT /items/{id} is covered by TestUpdateItemOpenAPI
 
 // Test for GetItemByIdHandler is renamed to TestGetItemByIdOpenAPI and uses the OpenAPI router.
 // Test for CreateItemHandler is renamed to TestCreateItemOpenAPI and uses the OpenAPI router.

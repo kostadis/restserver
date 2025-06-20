@@ -83,7 +83,6 @@ func main() {
 	// Note: The GetItemHandler was removed, so we don't register it here.
 	// The POST /items route is now handled by the OpenAPI generated code via HandlerWithOptions.
 	router.Get("/items", handlers.GetItemsHandler(DB)) // For getting all items
-	// router.Put("/items/{id}", handlers.UpdateItemHandler(DB)) // THIS LINE IS REMOVED
 	// router.Delete("/items/{id}", handlers.DeleteItemHandler(DB)) // THIS LINE IS REMOVED
 
 
