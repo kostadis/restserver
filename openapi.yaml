@@ -115,6 +115,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete an item by its ID
+      operationId: deleteItemById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the item to delete
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Item deleted successfully
+        '400':
+          description: Invalid ID supplied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:

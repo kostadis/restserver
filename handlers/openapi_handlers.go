@@ -188,3 +188,21 @@ func (s *ItemAPIServer) UpdateItemById(w http.ResponseWriter, r *http.Request, i
         // Log error, as headers are already written
     }
 }
+
+// DeleteItemById implements the logic for the (DELETE /items/{id}) endpoint.
+func (s *ItemAPIServer) DeleteItemById(w http.ResponseWriter, r *http.Request, id int64) {
+	_, err := database.DeleteItem(s.DB, id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(openapi.Error{Error: "Item not found"})
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(openapi.Error{Error: "Failed to delete item: " + err.Error()})
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content for successful deletion
+}

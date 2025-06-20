@@ -112,36 +112,3 @@ func UpdateItemHandler(db *sql.DB) http.HandlerFunc {
 		writeJSONResponse(w, http.StatusOK, updatedItem)
 	}
 }
-
-// DeleteItemHandler handles deleting an item by its ID.
-func DeleteItemHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	if idStr == "" {
-		writeJSONResponse(w, http.StatusBadRequest, "Item ID not provided in URL path")
-			return
-		}
-
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-		writeJSONResponse(w, http.StatusBadRequest, "Invalid Item ID format in URL path")
-			return
-		}
-
-		rowsAffected, err := database.DeleteItem(db, id)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				writeJSONResponse(w, http.StatusNotFound, "Item not found to delete")
-			} else {
-				writeJSONResponse(w, http.StatusInternalServerError, "Failed to delete item")
-			}
-			return
-		}
-
-		if rowsAffected == 0 {
-			writeJSONResponse(w, http.StatusNotFound, "Item not found, no deletion occurred")
-			return
-		}
-		writeJSONResponse(w, http.StatusNoContent, nil)
-	}
-}
