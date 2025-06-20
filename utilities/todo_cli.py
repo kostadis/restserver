@@ -69,25 +69,43 @@ def _print_api_exception_details(e: ApiException):
         except json.JSONDecodeError:
             print(f"Details (raw): {e.body}")
 
-def handle_list_items():
-    """Handles listing all items."""
+# Helper function to print item details consistently
+def _print_item_details(item_obj: Item):
+    """Prints the details of a single item object."""
+    print(f"  ID: {item_obj.id}")
+    print(f"  Name: {item_obj.name}")
+    description = 'N/A'
+    if hasattr(item_obj, 'description') and item_obj.description is not None:
+        description = item_obj.description
+    print(f"  Description: {description}")
+    print(f"  Priority: {item_obj.priority}")
+    print("-" * 20)
+
+def handle_list_items(args):
+    """Handles listing all items or a specific item by ID."""
     try:
-        items = api.get_items() # Corresponds to operationId: getItems
-        if items:
-            print("Todo Items:")
-            for item_obj in items: # item_obj is now an instance of the Item model
-                print(f"  ID: {item_obj.id}")
-                print(f"  Name: {item_obj.name}")
-                # Handle optional description:
-                description = 'N/A'
-                if hasattr(item_obj, 'description') and item_obj.description is not None:
-                    description = item_obj.description
-                print(f"  Description: {description}")
-                print(f"  Priority: {item_obj.priority}")
-                print("-" * 20)
+        if args.id is not None:
+            # Fetch and display a single item
+            # print(f"Fetching item with ID: {args.id}...") # Optional debug message
+            item = api.get_item_by_id(id=args.id)
+            print("Item Details:")
+            _print_item_details(item)
         else:
-            print("No items found.")
+            # List all items
+            items = api.get_items()
+            if items:
+                print("Todo Items:")
+                for item_obj in items:
+                    _print_item_details(item_obj)
+            else:
+                print("No items found.")
+    except NotFoundException:
+        # This is particularly relevant when args.id is provided
+        print(f"Error: Item with ID {args.id} not found.")
+        sys.exit(1)
     except ApiException as e:
+        # General API error for other cases (e.g., server down when listing all)
+        print(f"API Error:")
         _print_api_exception_details(e)
         sys.exit(1)
     except Exception as e:
@@ -206,7 +224,9 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List command
-    list_parser = subparsers.add_parser("list", help="List all items")
+    list_parser = subparsers.add_parser("list", help="List all items or a specific item by ID.")
+    list_parser.add_argument("id", type=int, nargs="?", default=None,
+                             help="Optional ID of the item to display. If not provided, lists all items.")
 
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a new item")
@@ -229,7 +249,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "list":
-        handle_list_items()
+        handle_list_items(args)
     elif args.command == "create":
         handle_create_item(args)
     elif args.command == "delete":

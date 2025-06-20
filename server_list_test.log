@@ -1,0 +1,17 @@
+2025/06/20 16:45:37 Server starting on port :8080
+2025/06/20 16:45:41 Started GET /items
+2025/06/20 16:45:41 Completed GET /items in 752.587µs
+2025/06/20 16:45:42 Started GET /items/1
+2025/06/20 16:45:42 Completed GET /items/1 in 617.697µs
+2025/06/20 16:45:43 Started POST /items
+2025/06/20 16:45:43 Completed POST /items in 3.971259ms
+2025/06/20 16:45:43 Started POST /items
+2025/06/20 16:45:43 Completed POST /items in 3.345424ms
+2025/06/20 16:45:44 Started GET /items
+2025/06/20 16:45:44 Completed GET /items in 377.573µs
+2025/06/20 16:45:45 Started GET /items/7
+2025/06/20 16:45:45 Completed GET /items/7 in 228.116µs
+2025/06/20 16:45:45 Started GET /items/8
+2025/06/20 16:45:45 Completed GET /items/8 in 192.114µs
+2025/06/20 16:45:46 Started GET /items/9999
+2025/06/20 16:45:46 Completed GET /items/9999 in 217.606µs
