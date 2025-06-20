@@ -72,6 +72,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    put:
+      summary: Update an existing item
+      operationId: updateItemById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the item to update
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: Item data to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItem'
+      responses:
+        '200':
+          description: Item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: Invalid request payload or input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
@@ -85,6 +128,21 @@ components:
           type: string
         description:
           type: string
+          nullable: true
+        priority:
+          type: integer
+          format: int32
+    UpdateItem:
+      type: object
+      required:
+        - name
+        - priority
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
         priority:
           type: integer
           format: int32
@@ -99,9 +157,10 @@ components:
           type: string
         description:
           type: string
+          nullable: true
         priority:
           type: integer
-          format: int32 # Assuming priority is int32, adjust if it's int64
+          format: int32
       required:
         - name
         - priority

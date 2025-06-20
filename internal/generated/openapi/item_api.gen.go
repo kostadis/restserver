@@ -18,7 +18,7 @@ type Error struct {
 
 // Item defines model for Item.
 type Item struct {
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description"`
 	Id          *int64  `json:"id,omitempty"`
 	Name        string  `json:"name"`
 	Priority    int32   `json:"priority"`
@@ -26,13 +26,23 @@ type Item struct {
 
 // NewItem defines model for NewItem.
 type NewItem struct {
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description"`
+	Name        string  `json:"name"`
+	Priority    int32   `json:"priority"`
+}
+
+// UpdateItem defines model for UpdateItem.
+type UpdateItem struct {
+	Description *string `json:"description"`
 	Name        string  `json:"name"`
 	Priority    int32   `json:"priority"`
 }
 
 // CreateItemJSONRequestBody defines body for CreateItem for application/json ContentType.
 type CreateItemJSONRequestBody = NewItem
+
+// UpdateItemByIdJSONRequestBody defines body for UpdateItemById for application/json ContentType.
+type UpdateItemByIdJSONRequestBody = UpdateItem
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -42,6 +52,9 @@ type ServerInterface interface {
 	// Get an item by its ID
 	// (GET /items/{id})
 	GetItemById(w http.ResponseWriter, r *http.Request, id int64)
+	// Update an existing item
+	// (PUT /items/{id})
+	UpdateItemById(w http.ResponseWriter, r *http.Request, id int64)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -57,6 +70,12 @@ func (_ Unimplemented) CreateItem(w http.ResponseWriter, r *http.Request) {
 // Get an item by its ID
 // (GET /items/{id})
 func (_ Unimplemented) GetItemById(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update an existing item
+// (PUT /items/{id})
+func (_ Unimplemented) UpdateItemById(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -101,6 +120,32 @@ func (siw *ServerInterfaceWrapper) GetItemById(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetItemById(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// UpdateItemById operation middleware
+func (siw *ServerInterfaceWrapper) UpdateItemById(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateItemById(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -228,6 +273,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/items/{id}", wrapper.GetItemById)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/items/{id}", wrapper.UpdateItemById)
 	})
 
 	return r
