@@ -5,6 +5,36 @@ info:
   description: API for managing items.
 
 paths:
+  /items:
+    post:
+      summary: Create a new item
+      operationId: createItem
+      requestBody:
+        description: Item to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewItem'
+      responses:
+        '201':
+          description: Item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /items/{id}:
     get:
       summary: Get an item by its ID
@@ -45,6 +75,19 @@ paths:
 
 components:
   schemas:
+    NewItem:
+      type: object
+      required:
+        - name
+        - priority
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        priority:
+          type: integer
+          format: int32
     Item:
       type: object
       properties:
