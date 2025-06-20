@@ -4,72 +4,90 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"time" // Added for loggingMiddleware
+	"time"
 
-	"app/database" // Assuming module name 'app'
-	"app/handlers" // Assuming module name 'app'
+	"app/database"
+	"app/handlers"
+	"app/internal/generated/openapi" // Added for generated code
 
-	"github.com/gorilla/mux"
-	_ "github.com/mattn/go-sqlite3" // Ensure SQLite driver is included
+	"github.com/go-chi/chi/v5" // Replaced gorilla/mux
+	// chi_middleware "github.com/go-chi/chi/v5/middleware" // Optional: For Chi's own middlewares
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var DB *sql.DB
 
 func init() {
 	var err error
-	DB, err = database.InitDB("sqlite.db")
+	DB, err = database.InitDB("sqlite.db") // Assuming InitDB is compatible or adapted
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 }
 
-// loggingMiddleware logs the incoming request and the time taken to process it.
+// loggingMiddleware remains the same as it's standard http.Handler compatible
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("Started %s %s", r.Method, r.RequestURI)
-
-		// Call the next handler in the chain.
+		log.Printf("Started %s %s from %s", r.Method, r.RequestURI, r.RemoteAddr)
 		next.ServeHTTP(w, r)
-
 		log.Printf("Completed %s %s in %v", r.Method, r.RequestURI, time.Since(start))
 	})
 }
 
 func main() {
-	// Create a new router
-	router := mux.NewRouter()
+	// Create a new Chi router
+	router := chi.NewRouter()
 
-	// Register API routes
-	// Item routes
-	router.HandleFunc("/items", handlers.CreateItemHandler(DB)).Methods(http.MethodPost)
-	router.HandleFunc("/items/{id}", handlers.GetItemHandler(DB)).Methods(http.MethodGet)
-	// Note: For GET /items and GET /items/{id} to work correctly with gorilla/mux,
-	// ensure the more specific route (/items/{id}) is registered before the general one (/items)
-	// if there's any ambiguity, or rely on mux's default matching.
-	// However, with distinct paths or methods, order is less critical.
-	// The current setup for /items (GET all) and /items/{id} (GET one) is fine as they are distinct.
-	// If GetItemsHandler was meant for a path like "/items/" and GetItemHandler for "/items/{id}",
-	// then specific registration order or strict slash handling might be needed.
-	// Given they are:
-	// POST /items -> CreateItemHandler
-	// GET  /items/{id} -> GetItemHandler
-	// GET  /items -> GetItemsHandler
-	// PUT  /items/{id} -> UpdateItemHandler
-	// DELETE /items/{id} -> DeleteItemHandler
-	// This is a standard and correct setup.
-	router.HandleFunc("/items", handlers.GetItemsHandler(DB)).Methods(http.MethodGet)
-	router.HandleFunc("/items/{id}", handlers.UpdateItemHandler(DB)).Methods(http.MethodPut)
-	router.HandleFunc("/items/{id}", handlers.DeleteItemHandler(DB)).Methods(http.MethodDelete)
+	// Apply the logging middleware (Chi also has its own logging middleware if preferred)
+	router.Use(loggingMiddleware)
+	// router.Use(chi_middleware.Logger) // Alternative using Chi's logger
 
-	// Apply the logging middleware to the main router
-	loggedRouter := loggingMiddleware(router)
+	// Instantiate our Item API server implementation
+	itemAPIServer := handlers.NewItemAPIServer(DB)
+
+	// Register the OpenAPI-generated handlers.
+	// The openapi.HandlerWithOptions function will register routes like /items/{id}
+	// onto the router passed to it, or create a new one.
+	// We can mount it on a sub-route e.g. /api/v1 or directly on root.
+	// For this example, let's assume the paths in openapi.yaml are root paths.
+	// openapi.Handler() creates a new chi router internally and mounts the generated handlers.
+	// We want to use our main router.
+
+	// Option 1: Let openapi.Handler create its own router and mount it
+	// itemAPIChiRouter := openapi.Handler(itemAPIServer)
+	// router.Mount("/items", itemAPIChiRouter) // This would make the path /items/items/{id} - likely not desired
+	// The paths in openapi.yaml are /items/{id}, so we want to use HandlerFromMux or HandlerWithOptions
+
+	// Option 2: Use HandlerFromMux to register generated routes on our main router
+	// This is generally cleaner if the generated paths are meant to be at the root of this router.
+	// The `openapi.HandlerWithOptions` function adds the routes to the provided BaseRouter.
+	// The generated `HandlerWithOptions` in `item_api.gen.go` looks like:
+	// r.Group(func(r chi.Router) {
+	//   r.Get(options.BaseURL+"/items/{id}", wrapper.GetItemById)
+	// })
+	// So, it will add "/items/{id}" to the router we pass.
+
+	// This will register GET /items/{id}
+	openapi.HandlerWithOptions(itemAPIServer, openapi.ChiServerOptions{
+		BaseRouter: router, // Register on our main router
+		// Middlewares: []openapi.MiddlewareFunc{}, // Optional: API specific middlewares
+		// ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) { ... } // Optional
+	})
+
+	// Register other existing API routes using Chi's syntax
+	// These handlers are from handlers/item_handlers.go
+	// Note: The GetItemHandler was removed, so we don't register it here.
+	router.Post("/items", handlers.CreateItemHandler(DB))
+	router.Get("/items", handlers.GetItemsHandler(DB)) // For getting all items
+	router.Put("/items/{id}", handlers.UpdateItemHandler(DB))
+	router.Delete("/items/{id}", handlers.DeleteItemHandler(DB))
+
 
 	// Start the HTTP server
 	port := ":8080"
-	log.Printf("Server starting on port %s\n", port)
-	// Use the middleware-wrapped router for ListenAndServe
-	if err := http.ListenAndServe(port, loggedRouter); err != nil {
+	log.Printf("Server starting on port %s using Chi router", port) // Corrected log message formatting
+	if err := http.ListenAndServe(port, router); err != nil { // Pass the Chi router directly
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
