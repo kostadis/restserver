@@ -69,30 +69,52 @@ def _print_api_exception_details(e: ApiException):
         except json.JSONDecodeError:
             print(f"Details (raw): {e.body}")
 
-def handle_list_items():
-    """Handles listing all items."""
-    try:
-        items = api.get_items() # Corresponds to operationId: getItems
-        if items:
-            print("Todo Items:")
-            for item_obj in items: # item_obj is now an instance of the Item model
-                print(f"  ID: {item_obj.id}")
-                print(f"  Name: {item_obj.name}")
-                # Handle optional description:
-                description = 'N/A'
-                if hasattr(item_obj, 'description') and item_obj.description is not None:
-                    description = item_obj.description
-                print(f"  Description: {description}")
-                print(f"  Priority: {item_obj.priority}")
-                print("-" * 20)
-        else:
-            print("No items found.")
-    except ApiException as e:
-        _print_api_exception_details(e)
-        sys.exit(1)
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+def handle_list_items(args):
+    """Handles listing items. If an ID is provided, lists that specific item."""
+    if args.id is not None:
+        try:
+            item_obj = api.get_item_by_id(id=args.id) # Corresponds to operationId: getItemById
+            print(f"Todo Item (ID: {item_obj.id}):")
+            print(f"  ID: {item_obj.id}")
+            print(f"  Name: {item_obj.name}")
+            description = 'N/A'
+            if hasattr(item_obj, 'description') and item_obj.description is not None:
+                description = item_obj.description
+            print(f"  Description: {description}")
+            print(f"  Priority: {item_obj.priority}")
+        except NotFoundException as e:
+            print(f"Error: Item with ID {args.id} not found.")
+            _print_api_exception_details(e)
+            sys.exit(1)
+        except ApiException as e:
+            _print_api_exception_details(e)
+            sys.exit(1)
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            sys.exit(1)
+    else:
+        try:
+            items = api.get_items() # Corresponds to operationId: getItems
+            if items:
+                print("Todo Items:")
+                for item_obj in items: # item_obj is now an instance of the Item model
+                    print(f"  ID: {item_obj.id}")
+                    print(f"  Name: {item_obj.name}")
+                    # Handle optional description:
+                    description = 'N/A'
+                    if hasattr(item_obj, 'description') and item_obj.description is not None:
+                        description = item_obj.description
+                    print(f"  Description: {description}")
+                    print(f"  Priority: {item_obj.priority}")
+                    print("-" * 20)
+            else:
+                print("No items found.")
+        except ApiException as e:
+            _print_api_exception_details(e)
+            sys.exit(1)
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            sys.exit(1)
 
 
 def handle_create_item(args):
@@ -225,6 +247,7 @@ def main():
 
     # List command
     list_parser = subparsers.add_parser("list", help="List all items")
+    list_parser.add_argument("id", type=int, nargs="?", help="Optional ID of the item to list")
 
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a new item")
@@ -248,7 +271,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "list":
-        handle_list_items()
+        handle_list_items(args)
     elif args.command == "create":
         handle_create_item(args)
     elif args.command == "delete":
