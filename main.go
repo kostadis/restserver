@@ -68,7 +68,8 @@ func main() {
 	// })
 	// So, it will add "/items/{id}" to the router we pass.
 
-	// This will register GET /items/{id}
+	// This will register GET /items/{id}, POST /items, and PUT /items/{id}
+	// (because UpdateItemById is now part of ServerInterface and implemented by ItemAPIServer)
 	openapi.HandlerWithOptions(itemAPIServer, openapi.ChiServerOptions{
 		BaseRouter: router, // Register on our main router
 		// Middlewares: []openapi.MiddlewareFunc{}, // Optional: API specific middlewares
@@ -80,7 +81,7 @@ func main() {
 	// Note: The GetItemHandler was removed, so we don't register it here.
 	// The POST /items route is now handled by the OpenAPI generated code via HandlerWithOptions.
 	router.Get("/items", handlers.GetItemsHandler(DB)) // For getting all items
-	router.Put("/items/{id}", handlers.UpdateItemHandler(DB))
+	// router.Put("/items/{id}", handlers.UpdateItemHandler(DB)) // THIS LINE IS REMOVED
 	router.Delete("/items/{id}", handlers.DeleteItemHandler(DB))
 
 
