@@ -11,7 +11,8 @@ import (
 	"app/database"
 	"app/models"
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5" // Added for URLParam
+	// "github.com/gorilla/mux" // Replaced by chi
 )
 
 // writeJSONResponse is a helper function to write JSON responses.
@@ -82,49 +83,20 @@ func GetItemsHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// GetItemHandler handles retrieving a single item by its ID.
-func GetItemHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		idStr, ok := vars["id"]
-		if !ok {
-			// This case should ideally not happen if route is defined correctly
-			writeJSONResponse(w, http.StatusBadRequest, "Item ID not provided in URL path")
-			return
-		}
-
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, "Invalid item ID format")
-			return
-		}
-
-		item, err := database.GetItem(db, id)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				writeJSONResponse(w, http.StatusNotFound, "Item not found")
-			} else {
-				writeJSONResponse(w, http.StatusInternalServerError, "Failed to retrieve item")
-			}
-			return
-		}
-		writeJSONResponse(w, http.StatusOK, item)
-	}
-}
-
+// GetItemHandler was here (now handled by OpenAPI spec)
+// UpdateItemHandler handles updating an existing item.
 // UpdateItemHandler handles updating an existing item.
 func UpdateItemHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		idStr, ok := vars["id"]
-		if !ok {
+		idStr := chi.URLParam(r, "id")
+		if idStr == "" {
 			writeJSONResponse(w, http.StatusBadRequest, "Item ID not provided in URL path")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, "Invalid item ID format")
+			writeJSONResponse(w, http.StatusBadRequest, "Invalid Item ID format in URL path")
 			return
 		}
 
@@ -169,16 +141,15 @@ func UpdateItemHandler(db *sql.DB) http.HandlerFunc {
 // DeleteItemHandler handles deleting an item by its ID.
 func DeleteItemHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		idStr, ok := vars["id"]
-		if !ok {
-			writeJSONResponse(w, http.StatusBadRequest, "Item ID not provided in URL path")
+	idStr := chi.URLParam(r, "id")
+	if idStr == "" {
+		writeJSONResponse(w, http.StatusBadRequest, "Item ID not provided in URL path")
 			return
 		}
 
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, "Invalid item ID format")
+		writeJSONResponse(w, http.StatusBadRequest, "Invalid Item ID format in URL path")
 			return
 		}
 

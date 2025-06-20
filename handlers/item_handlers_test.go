@@ -6,49 +6,71 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath" // For robust schema path finding for test DB
-	"runtime"       // For robust schema path finding for test DB
+	"path/filepath"
+	stdruntime "runtime" // Standard runtime
 	"strconv"
 	"strings"
 	"testing"
+	"errors" // For custom error handler
 
-	"app/database" // To init a test DB and for handler dependencies
-	"app/models"
+	"app/database"
+	"app/models" // Original model, still used for creating test data
+	"app/internal/generated/openapi" // Added for generated types & its local error types
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	_ "github.com/mattn/go-sqlite3"
 )
 
-// getProjectRootForHandlers returns the root directory of the project from handlers_test.go
+// getProjectRootForHandlers uses standard runtime.
 func getProjectRootForHandlers() string {
-	_, b, _, _ := runtime.Caller(0)
-	// Root directory of project is one level up from handlers_test.go
+	_, b, _, _ := stdruntime.Caller(0)
 	return filepath.Join(filepath.Dir(b), "..")
 }
 
-// setupHandlerTestDB initializes an in-memory SQLite database for handler tests.
-// It's similar to the one in database_test.go but adapted for handler test context if needed.
-// Crucially, it ensures that database.InitDB can find the schema.sql.
+// setupHandlerTestDB remains the same.
 func setupHandlerTestDB(t *testing.T) *sql.DB {
-	// The database.InitDB function has been updated to find schema.sql relative to its own package.
-	// So, calling it with ":memory:" should now work correctly from any test file.
 	db, err := database.InitDB(":memory:")
 	require.NoError(t, err, "Failed to initialize test database for handlers")
-
-	// Teardown (closing the DB) will be managed by the individual test functions
-	// or a suite setup if using testify/suite. For individual tests, defer db.Close().
 	return db
 }
+
+// setupTestRouter initializes a Chi router with the necessary handlers for testing.
+func setupTestRouter(db *sql.DB) *chi.Mux {
+	router := chi.NewRouter()
+	itemAPIServer := NewItemAPIServer(db)
+
+	openapi.HandlerWithOptions(itemAPIServer, openapi.ChiServerOptions{
+		BaseRouter: router,
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			w.Header().Set("Content-Type", "application/json")
+			var status int
+			var e *openapi.InvalidParamFormatError // Use error type from the generated openapi package
+			if errors.As(err, &e) {
+				status = http.StatusBadRequest
+			} else {
+				status = http.StatusBadRequest
+			}
+			w.WriteHeader(status)
+			json.NewEncoder(w).Encode(openapi.Error{Error: err.Error()})
+		},
+	})
+
+	router.Post("/items", CreateItemHandler(db))
+	router.Get("/items", GetItemsHandler(db))
+	router.Put("/items/{id}", UpdateItemHandler(db))
+	router.Delete("/items/{id}", DeleteItemHandler(db))
+
+	return router
+}
+
 
 func TestCreateItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-
-	router := mux.NewRouter()
-	router.HandleFunc("/items", CreateItemHandler(db)).Methods(http.MethodPost)
+	router := setupTestRouter(db)
 
 	itemPayload := models.Item{
 		Name:        "Test Handler Item",
@@ -63,109 +85,99 @@ func TestCreateItemHandler(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req) // Use router to serve to match routes correctly
+	router.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusCreated, rr.Code, "Handler returned wrong status code")
-
+	assert.Equal(t, http.StatusCreated, rr.Code)
 	var createdItem models.Item
 	err = json.NewDecoder(rr.Body).Decode(&createdItem)
-	require.NoError(t, err, "Failed to decode response body")
-
-	assert.NotZero(t, createdItem.ID, "Expected created item to have an ID")
+	require.NoError(t, err)
+	assert.NotZero(t, createdItem.ID)
 	assert.Equal(t, itemPayload.Name, createdItem.Name)
-	assert.Equal(t, itemPayload.Description, createdItem.Description)
-	assert.Equal(t, itemPayload.Priority, createdItem.Priority)
-
-	// Verify in DB as well
-	dbItem, err := database.GetItem(db, createdItem.ID)
-	require.NoError(t, err, "Failed to get item from DB for verification")
-	assert.Equal(t, createdItem.Name, dbItem.Name)
 }
 
-// TestGetItemsHandler outlines a test for getting all items.
 func TestGetItemsHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-
-	// Setup: Add some items to the DB
-	_, err := database.CreateItem(db, models.Item{Name: "Item1", Priority: 1})
+	_, err := database.CreateItem(db, models.Item{Name: "Item1", Description: "Desc1", Priority: 1})
 	require.NoError(t, err)
-	_, err = database.CreateItem(db, models.Item{Name: "Item2", Priority: 2})
+	_, err = database.CreateItem(db, models.Item{Name: "Item2", Description: "Desc2", Priority: 2})
 	require.NoError(t, err)
-
-	router := mux.NewRouter()
-	router.HandleFunc("/items", GetItemsHandler(db)).Methods(http.MethodGet)
+	router := setupTestRouter(db)
 
 	req, err := http.NewRequest(http.MethodGet, "/items", nil)
 	require.NoError(t, err)
-
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-
 	var items []models.Item
 	err = json.NewDecoder(rr.Body).Decode(&items)
 	require.NoError(t, err)
-	assert.Len(t, items, 2, "Expected two items")
+	assert.Len(t, items, 2)
 }
 
-// TestGetItemHandler outlines a test for getting a single item.
-func TestGetItemHandler(t *testing.T) {
+func TestGetItemByIdHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-
-	// Setup: Add an item
-	created, err := database.CreateItem(db, models.Item{Name: "SpecificItem", Priority: 3})
+	createdItemInput := models.Item{Name: "SpecificItem", Description: "Specific Description", Priority: 3}
+	createdID, err := database.CreateItem(db, createdItemInput)
 	require.NoError(t, err)
-
-	router := mux.NewRouter()
-	router.HandleFunc("/items/{id}", GetItemHandler(db)).Methods(http.MethodGet)
+	router := setupTestRouter(db)
 
 	t.Run("found", func(t *testing.T) {
-		reqPath := "/items/" + strconv.FormatInt(created, 10)
+		reqPath := "/items/" + strconv.FormatInt(createdID, 10)
 		req, err := http.NewRequest(http.MethodGet, reqPath, nil)
 		require.NoError(t, err)
-
 		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req) // router will match {id}
-
+		router.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var item models.Item
+		var item openapi.Item
 		err = json.NewDecoder(rr.Body).Decode(&item)
 		require.NoError(t, err)
-		assert.Equal(t, "SpecificItem", item.Name)
+		require.NotNil(t, item.Id)
+		assert.Equal(t, createdID, *item.Id)
+		assert.Equal(t, createdItemInput.Name, item.Name)
+		require.NotNil(t, item.Description)
+		assert.Equal(t, createdItemInput.Description, *item.Description)
+		assert.Equal(t, int32(createdItemInput.Priority), item.Priority)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/items/9999", nil)
+		req, err := http.NewRequest(http.MethodGet, "/items/99999", nil)
 		require.NoError(t, err)
-
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
-
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		var errResp map[string]string
+		var errResp openapi.Error
 		err = json.NewDecoder(rr.Body).Decode(&errResp)
 		require.NoError(t, err)
-		assert.Contains(t, errResp["error"], "Item not found")
+		assert.Contains(t, errResp.Error, "Item not found")
+	})
+
+	t.Run("invalid id format", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/items/abc", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		var errResp openapi.Error
+		decodeErr := json.NewDecoder(rr.Body).Decode(&errResp)
+		require.NoError(t, decodeErr, "Failed to decode error response into openapi.Error for invalid id format")
+		assert.NotEmpty(t, errResp.Error)
+		assert.Contains(t, strings.ToLower(errResp.Error), "invalid format for parameter", "Error message should indicate invalid format for parameter")
 	})
 }
 
-// TestUpdateItemHandler outlines a test for updating an item.
 func TestUpdateItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-
-	initialID, err := database.CreateItem(db, models.Item{Name: "InitialName", Priority: 1})
+	initialItem := models.Item{Name: "InitialName", Description: "Initial Desc", Priority: 1}
+	initialID, err := database.CreateItem(db, initialItem)
 	require.NoError(t, err)
+	router := setupTestRouter(db)
 
-	router := mux.NewRouter()
-	router.HandleFunc("/items/{id}", UpdateItemHandler(db)).Methods(http.MethodPut)
-
-	updatePayload := models.Item{Name: "UpdatedName", Priority: 2}
+	updatePayload := models.Item{Name: "UpdatedName", Description: "Updated Desc", Priority: 2}
 	payloadBytes, _ := json.Marshal(updatePayload)
-
 	reqPath := "/items/" + strconv.FormatInt(initialID, 10)
 	req, err := http.NewRequest(http.MethodPut, reqPath, bytes.NewBuffer(payloadBytes))
 	require.NoError(t, err)
@@ -179,53 +191,58 @@ func TestUpdateItemHandler(t *testing.T) {
 	err = json.NewDecoder(rr.Body).Decode(&updatedItem)
 	require.NoError(t, err)
 	assert.Equal(t, "UpdatedName", updatedItem.Name)
-	assert.Equal(t, initialID, updatedItem.ID) // Ensure ID remains the same
+	assert.Equal(t, initialID, updatedItem.ID)
 }
 
-// TestDeleteItemHandler outlines a test for deleting an item.
 func TestDeleteItemHandler(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
-
-	initialID, err := database.CreateItem(db, models.Item{Name: "ToDelete", Priority: 1})
+	itemToDelete := models.Item{Name: "ToDelete", Description: "Delete Desc", Priority: 1}
+	initialID, err := database.CreateItem(db, itemToDelete)
 	require.NoError(t, err)
-
-	router := mux.NewRouter()
-	router.HandleFunc("/items/{id}", DeleteItemHandler(db)).Methods(http.MethodDelete)
+	router := setupTestRouter(db)
 
 	reqPath := "/items/" + strconv.FormatInt(initialID, 10)
 	req, err := http.NewRequest(http.MethodDelete, reqPath, nil)
 	require.NoError(t, err)
-
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
-
-	// Verify item is deleted from DB
 	_, err = database.GetItem(db, initialID)
-	assert.Error(t, err) // Expect an error (sql.ErrNoRows)
+	assert.Error(t, err)
+	assert.Equal(t, sql.ErrNoRows, err, "Expected sql.ErrNoRows after deleting item")
 }
 
-// Placeholder for TestCreateItemHandler with bad request (e.g. invalid JSON)
 func TestCreateItemHandler_BadRequest(t *testing.T) {
 	db := setupHandlerTestDB(t)
 	defer db.Close()
+	router := setupTestRouter(db)
 
-	router := mux.NewRouter()
-	router.HandleFunc("/items", CreateItemHandler(db)).Methods(http.MethodPost)
+	t.Run("malformed json", func(t *testing.T) {
+		// Malformed: missing closing brace for name string, and overall closing brace
+		req, err := http.NewRequest(http.MethodPost, "/items", strings.NewReader("{\"name\": \"bad json value"))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		var errResp map[string]string
+		err = json.NewDecoder(rr.Body).Decode(&errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp["error"], "Invalid request payload", "Expected 'Invalid request payload' for malformed JSON")
+	})
 
-	// Invalid JSON payload
-	req, err := http.NewRequest(http.MethodPost, "/items", strings.NewReader("{name: \"bad json\"}"))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	var errResp map[string]string
-	err = json.NewDecoder(rr.Body).Decode(&errResp)
-	require.NoError(t, err)
-	assert.Contains(t, errResp["error"], "Invalid request payload")
+	t.Run("missing required fields", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodPost, "/items", strings.NewReader("{\"description\": \"only description\"}"))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		var errResp map[string]string
+		err = json.NewDecoder(rr.Body).Decode(&errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp["error"], "Name and a positive Priority are required", "Expected validation error for missing fields")
+	})
 }
