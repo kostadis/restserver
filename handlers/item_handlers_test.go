@@ -458,6 +458,79 @@ func TestDeleteItemHandler(t *testing.T) { // Assuming this remains non-OpenAPI 
 	assert.True(t, errors.Is(err, sql.ErrNoRows), "Expected sql.ErrNoRows after deleting item")
 }
 
+func TestDeleteItemByIdOpenAPI(t *testing.T) {
+	db := setupHandlerTestDB(t)
+	defer db.Close()
+
+	// Use the router that has OpenAPI handlers registered
+	router := setupTestRouter(db)
+	// For requests that don't need a running server, httptest.NewRecorder is sufficient.
+	// For tests that might benefit from a full server context (e.g. testing client behavior),
+	// httptest.NewServer can be used, similar to TestUpdateItemOpenAPI.
+	// Let's use httptest.NewRecorder for direct handler testing where possible.
+
+	t.Run("Successful Deletion (204 No Content)", func(t *testing.T) {
+		// 1. Create an item
+		itemToCreate := models.Item{Name: "Item To Be Deleted", Description: "Test Description", Priority: 1}
+		createdItem := createTestItemDirectly(t, db, itemToCreate)
+
+		// 2. Send a DELETE request
+		reqPath := "/items/" + strconv.FormatInt(createdItem.ID, 10)
+		req, _ := http.NewRequest(http.MethodDelete, reqPath, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		// 3. Assert 204 No Content
+		require.Equal(t, http.StatusNoContent, rr.Code, "Expected status 204 No Content")
+		assert.Equal(t, 0, rr.Body.Len(), "Expected empty body for 204 No Content")
+
+
+		// 4. Optionally, try to GET the item again and assert 404
+		reqGet, _ := http.NewRequest(http.MethodGet, reqPath, nil)
+		rrGet := httptest.NewRecorder()
+		router.ServeHTTP(rrGet, reqGet)
+		require.Equal(t, http.StatusNotFound, rrGet.Code, "Expected status 404 Not Found after deletion")
+
+		var errResp openapi.Error
+		err := json.NewDecoder(rrGet.Body).Decode(&errResp)
+		require.NoError(t, err, "Failed to decode error response body")
+		assert.Contains(t, errResp.Error, "Item not found", "Error message mismatch")
+	})
+
+	t.Run("Item Not Found (404 Not Found)", func(t *testing.T) {
+		nonExistentID := int64(99999)
+		reqPath := "/items/" + strconv.FormatInt(nonExistentID, 10)
+		req, _ := http.NewRequest(http.MethodDelete, reqPath, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusNotFound, rr.Code, "Expected status 404 Not Found")
+
+		var errResp openapi.Error
+		err := json.NewDecoder(rr.Body).Decode(&errResp)
+		require.NoError(t, err, "Failed to decode error response body")
+		assert.Equal(t, "Item not found", errResp.Error, "Error message mismatch")
+	})
+
+	t.Run("Invalid ID Format (400 Bad Request)", func(t *testing.T) {
+		reqPath := "/items/invalid_id_format"
+		req, _ := http.NewRequest(http.MethodDelete, reqPath, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		// The error is caught by the custom ErrorHandlerFunc in setupTestRouter,
+		// which wraps the oapi-codegen runtime's parameter binding error.
+		require.Equal(t, http.StatusBadRequest, rr.Code, "Expected status 400 Bad Request")
+
+		var errResp openapi.Error
+		err := json.NewDecoder(rr.Body).Decode(&errResp)
+		require.NoError(t, err, "Failed to decode error response body for invalid ID")
+		// The exact error message comes from the oapi-codegen runtime or Chi's parameter binding.
+		// We check for a substring that indicates a parameter format error.
+		assert.Contains(t, strings.ToLower(errResp.Error), "invalid format for parameter id", "Error message for invalid ID format mismatch")
+	})
+}
+
 // TestCreateItemHandler (old, non-OpenAPI one) is removed as POST /items is covered by TestCreateItemOpenAPI
 // TestUpdateItemHandler (old, non-OpenAPI one) is removed as PUT /items/{id} is covered by TestUpdateItemOpenAPI
 

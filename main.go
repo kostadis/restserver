@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config oapi-codegen-config.yaml openapi.yaml
+
 import (
 	"database/sql"
 	"log"
@@ -82,7 +84,7 @@ func main() {
 	// The POST /items route is now handled by the OpenAPI generated code via HandlerWithOptions.
 	router.Get("/items", handlers.GetItemsHandler(DB)) // For getting all items
 	// router.Put("/items/{id}", handlers.UpdateItemHandler(DB)) // THIS LINE IS REMOVED
-	router.Delete("/items/{id}", handlers.DeleteItemHandler(DB))
+	// router.Delete("/items/{id}", handlers.DeleteItemHandler(DB)) // THIS LINE IS REMOVED
 
 
 	// Start the HTTP server
