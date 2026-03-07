@@ -1,8 +1,16 @@
 # --- CONFIGURATION ---
-# Please replace these variables with your own IP and paths before running!
-$DeckIP = "YOUR_DECK_IP"
-$RemotePath = "~/bg3saves"
-$LocalDest = "C:\Users\YOUR_USERNAME\AppData\Local\Larian Studios\Baldur's Gate 3\PlayerProfiles\Public\Savegames\Story"
+$ConfigPath = Join-Path $PSScriptRoot "config.json"
+
+if (-Not (Test-Path $ConfigPath)) {
+    Write-Host "[ERROR] Configuration file not found! Please run setup_bg3_sync.ps1 first." -ForegroundColor Red
+    pause
+    exit
+}
+
+$ConfigData = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+$DeckIP = $ConfigData.DeckIP
+$RemotePath = $ConfigData.RemotePath
+$LocalDest = $ConfigData.LocalDest
 
 # --- CHOICE PROMPT ---
 Write-Host "-----------------------------------------------" -ForegroundColor Cyan

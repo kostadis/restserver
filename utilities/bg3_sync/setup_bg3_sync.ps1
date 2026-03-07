@@ -1,12 +1,29 @@
-# --- CONFIGURATION ---
-# Please replace these variables with your own IP before running!
-$DeckIP = "YOUR_DECK_IP"
-
-# The path to the actual save games folder on the Steam Deck
-$DeckSavePath = "~/.steam/steam/steamapps/compatdata/1086940/pfx/drive_c/users/steamuser/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"
-$SymlinkDest = "~/bg3saves"
-
+# --- CONFIGURATION SETUP ---
 Write-Host "-----------------------------------------------" -ForegroundColor Cyan
+Write-Host "  BG3 SYNC CONFIGURATION SETUP                 " -ForegroundColor Cyan
+Write-Host "-----------------------------------------------" -ForegroundColor Cyan
+
+$ConfigPath = Join-Path $PSScriptRoot "config.json"
+
+$DeckIP = Read-Host "Enter your Steam Deck IP Address"
+$LocalDest = Read-Host "Enter the path to your local Windows BG3 saves folder"
+# Typical path: C:\Users\YOUR_USERNAME\AppData\Local\Larian Studios\Baldur's Gate 3\PlayerProfiles\Public\Savegames\Story
+
+$RemotePath = "~/bg3saves"
+$DeckSavePath = "/home/deck/.steam/steam/steamapps/compatdata/1086940/pfx/drive_c/users/steamuser/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"
+
+$ConfigData = @{
+    DeckIP = $DeckIP
+    RemotePath = $RemotePath
+    LocalDest = $LocalDest
+}
+
+$ConfigData | ConvertTo-Json | Out-File -FilePath $ConfigPath -Encoding utf8
+Write-Host "[OK] Configuration saved to $ConfigPath" -ForegroundColor Green
+
+
+# --- SSH & SYMLINK SETUP ---
+Write-Host "`n-----------------------------------------------" -ForegroundColor Cyan
 Write-Host "  BG3 SYNC SETUP                               " -ForegroundColor Cyan
 Write-Host "-----------------------------------------------" -ForegroundColor Cyan
 
@@ -41,7 +58,7 @@ if ($LASTEXITCODE -eq 0) {
 # 2. SYMLINK SETUP
 Write-Host "`n[2] Setting up remote symlink..." -ForegroundColor Gray
 # Note: Path spaces require careful quoting on the remote side
-$CreateSymlinkCmd = "if [ ! -L $SymlinkDest ]; then ln -s `"$DeckSavePath`" $SymlinkDest; echo 'Symlink created'; else echo 'Symlink already exists'; fi"
+$CreateSymlinkCmd = "if [ ! -L $RemotePath ]; then ln -s `"$DeckSavePath`" $RemotePath; echo 'Symlink created'; else echo 'Symlink already exists'; fi"
 
 $SymlinkResult = ssh deck@$DeckIP $CreateSymlinkCmd
 Write-Host "[INFO] $SymlinkResult" -ForegroundColor Yellow
