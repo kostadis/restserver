@@ -96,31 +96,59 @@ Or, if you make the script executable (`chmod +x todo_cli.py`):
     python todo_cli.py delete 123
     ```
 
-## 5etools WSL Setup Script
+## 5etools Utilities
+
+A collection of Bash scripts for installing, packing, and unpacking 5etools to run as a persistent service under Windows Subsystem for Linux (WSL). These scripts are located in the `utilities/5etools` directory.
+
+### 5etools WSL Setup Script (`setup_5etools_wsl.sh`)
 
 A Bash script to install and configure 5etools to run as a persistent service under Windows Subsystem for Linux (WSL).
 
-### Setup
+#### Setup
 
 - Must be run inside a WSL terminal (Ubuntu recommended).
 - Ensure your WSL user has `sudo` privileges.
 - Do **not** run the script as root (i.e., do not use `sudo ./setup_5etools_wsl.sh`).
 
-### Usage
+#### Usage
 
 Make the script executable (if not already):
 ```bash
-chmod +x setup_5etools_wsl.sh
+chmod +x utilities/5etools/setup_5etools_wsl.sh
 ```
 
 Run the script:
 ```bash
-./setup_5etools_wsl.sh
+./utilities/5etools/setup_5etools_wsl.sh
 ```
 
-### Features
+#### Features
 
 - Installs required system dependencies (Node.js, git, curl, build-essential).
 - Clones the `5etools` repository and optionally the images repository.
 - Sets up an optional systemd service (`5etools`) for automatic starting and managing.
 - Creates a convenience update script at `~/update-5etools.sh` for easy updating in the future.
+
+### 5etools Packer Script (`pack-5etools.sh`)
+
+Creates a portable `.tar.gz` archive of an existing 5etools installation for transfer to another machine.
+
+#### Usage
+
+Run this on your source WSL machine:
+```bash
+./utilities/5etools/pack-5etools.sh [/path/to/usb/drive]
+```
+If no path is provided, it will attempt to auto-detect a mounted USB drive in `/mnt`.
+
+### 5etools Unpacker Script (`unpack-5etools.sh`)
+
+Restores a 5etools installation from a portable archive created by `pack-5etools.sh` on a new machine.
+
+#### Usage
+
+Run this on your destination WSL machine:
+```bash
+./utilities/5etools/unpack-5etools.sh [/path/to/5etools-portable-*.tar.gz]
+```
+If no path is provided, it will attempt to auto-detect the archive on mounted USB drives or in your home directory.
