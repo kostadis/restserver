@@ -95,3 +95,32 @@ Or, if you make the script executable (`chmod +x todo_cli.py`):
     ```bash
     python todo_cli.py delete 123
     ```
+
+## 5etools WSL Setup Script
+
+A Bash script to install and configure 5etools to run as a persistent service under Windows Subsystem for Linux (WSL).
+
+### Setup
+
+- Must be run inside a WSL terminal (Ubuntu recommended).
+- Ensure your WSL user has `sudo` privileges.
+- Do **not** run the script as root (i.e., do not use `sudo ./setup_5etools_wsl.sh`).
+
+### Usage
+
+Make the script executable (if not already):
+```bash
+chmod +x setup_5etools_wsl.sh
+```
+
+Run the script:
+```bash
+./setup_5etools_wsl.sh
+```
+
+### Features
+
+- Installs required system dependencies (Node.js, git, curl, build-essential).
+- Clones the `5etools` repository and optionally the images repository.
+- Sets up an optional systemd service (`5etools`) for automatic starting and managing.
+- Creates a convenience update script at `~/update-5etools.sh` for easy updating in the future.
