@@ -2,32 +2,32 @@
 
 ```mermaid
 flowchart TB
-    subgraph DataLayer ["Data Layer (JSON Files)"]
+    subgraph DataLayer
         direction TB
-        BaseRules["Base Rules\n(actions, books, conditions)"]
-        Entities["Entities\n(bestiary, classes, spells, items)"]
-        Fluff["Fluff / Lore\n(fluff-bestiary, fluff-classes)"]
-        Homebrew["Homebrew\n(user-provided JSON)"]
+        BaseRules
+        Entities
+        Fluff
+        Homebrew
     end
 
-    subgraph BuildPipeline ["Build Pipeline (Node.js)"]
+    subgraph BuildPipeline
         direction TB
-        GenAll["generate-all.js"]
-        GenIndexes["Generate Indexes\n(search, references, sub-classes)"]
-        GenPages["generate-pages.js\n(SEO/HTML generation)"]
-        BuildSW["build-sw.mjs\n(Service Worker for offline support)"]
-        BuildCSS["Sass Compilation\n(CSS)"]
+        GenAll
+        GenIndexes
+        GenPages
+        BuildSW
+        BuildCSS
 
         GenAll --> GenIndexes
         GenIndexes --> GenPages
     end
 
-    subgraph PresentationLayer ["Presentation Layer (Static HTML + JS)"]
+    subgraph PresentationLayer
         direction TB
-        HTMLPages["HTML Pages\n(bestiary.html, spells.html, etc.)"]
-        JSControllers["Page Controllers\n(bestiary.js, spells.js, etc.)"]
-        CoreJS["Core Utilities\n(utils.js, utils-ui.js, parser.js)"]
-        ServiceWorker["Service Worker\n(sw.js - Caching)"]
+        HTMLPages
+        JSControllers
+        CoreJS
+        ServiceWorker
     end
 
     %% Relationships
