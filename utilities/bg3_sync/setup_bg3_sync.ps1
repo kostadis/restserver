@@ -10,7 +10,9 @@ $LocalDest = Read-Host "Enter the path to your local Windows BG3 saves folder"
 # Typical path: C:\Users\YOUR_USERNAME\AppData\Local\Larian Studios\Baldur's Gate 3\PlayerProfiles\Public\Savegames\Story
 
 $RemotePath = "~/bg3saves"
-$DeckSavePath = "/home/deck/.steam/steam/steamapps/compatdata/1086940/pfx/drive_c/users/steamuser/AppData/Local/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"
+# This Deck runs the NATIVE Linux build of BG3 (saves under ~/.local/share),
+# not the Proton/Windows-compat build (~/.steam/.../compatdata/1086940/pfx/...).
+$DeckSavePath = "/home/deck/.local/share/Larian Studios/Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"
 
 $ConfigData = @{
     DeckIP = $DeckIP
@@ -57,8 +59,11 @@ if ($LASTEXITCODE -eq 0) {
 
 # 2. SYMLINK SETUP
 Write-Host "`n[2] Setting up remote symlink..." -ForegroundColor Gray
-# Note: Path spaces require careful quoting on the remote side
-$CreateSymlinkCmd = "if [ ! -L $RemotePath ]; then ln -s `"$DeckSavePath`" $RemotePath; echo 'Symlink created'; else echo 'Symlink already exists'; fi"
+# Note: the remote path contains spaces AND an apostrophe (Baldur's Gate 3).
+# PowerShell mangles embedded double quotes when passing to ssh.exe, so instead
+# of quoting the path we backslash-escape the spaces and apostrophe for bash.
+$EscapedPath = $DeckSavePath.Replace("'", "\'").Replace(" ", "\ ")
+$CreateSymlinkCmd = "if [ ! -L $RemotePath ]; then ln -s $EscapedPath $RemotePath && echo Symlink created; else echo Symlink already exists; fi"
 
 $SymlinkResult = ssh deck@$DeckIP $CreateSymlinkCmd
 Write-Host "[INFO] $SymlinkResult" -ForegroundColor Yellow

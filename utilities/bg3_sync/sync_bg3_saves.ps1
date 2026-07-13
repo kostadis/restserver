@@ -24,13 +24,17 @@ $choice = Read-Host "`nChoose an option (1 or 2)"
 if ($choice -eq "1") {
     # PULL LOGIC
     Write-Host "`nConnecting to Steam Deck at $DeckIP..." -ForegroundColor Gray
-    $RecentSaveNames = ssh deck@$DeckIP "ls -dt ${RemotePath}/*/ | head -n 10 | xargs -n 1 basename"
+    # basename-per-line without xargs, which would word-split names containing spaces
+    $RecentSaveNames = ssh deck@$DeckIP "ls -dt ${RemotePath}/*/ | head -n 10 | rev | cut -d/ -f2 | rev"
 
     foreach ($SaveName in $RecentSaveNames) {
         $LocalPath = Join-Path $LocalDest $SaveName
         if (!(Test-Path -LiteralPath $LocalPath)) {
             Write-Host "[NEW] Pulling: $SaveName" -ForegroundColor Yellow
-            scp -rp "deck@${DeckIP}:`"${RemotePath}/${SaveName}`"" "$LocalDest"
+            # Modern OpenSSH scp uses the SFTP protocol (no remote shell is invoked), so the
+            # remote path must be passed LITERALLY with no shell quoting. Spaces are fine as
+            # long as the whole "user@host:path" is a single PowerShell argument (it is here).
+            scp -rp "deck@${DeckIP}:${RemotePath}/${SaveName}" "$LocalDest"
         } else {
             Write-Host "[OK]  Already exists locally: $SaveName" -ForegroundColor Gray
         }
@@ -43,8 +47,9 @@ elseif ($choice -eq "2") {
 
     foreach ($Save in $RecentLocalSaves) {
         $SaveName = $Save.Name
-        # Check if the folder exists on the Deck
-        $existsOnDeck = ssh deck@$DeckIP "if [ -d `"${RemotePath}/${SaveName}`" ]; then echo 'true'; fi"
+        # Check if the folder exists on the Deck (single-quote the name for the remote shell)
+        $RemoteSave = "${RemotePath}/'" + $SaveName.Replace("'", "'\''") + "'"
+        $existsOnDeck = ssh deck@$DeckIP "if [ -d $RemoteSave ]; then echo true; fi"
 
         if ($existsOnDeck -ne "true") {
             Write-Host "[NEW] Pushing: $SaveName" -ForegroundColor Green
